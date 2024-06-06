@@ -21,7 +21,6 @@ from utils.transforms import get_affine_transform
 from utils.transforms import affine_transform
 from utils.transforms import fliplr_joints
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -107,7 +106,7 @@ class JointsDataset(Dataset):
 
         return center, scale
 
-    def __len__(self,):
+    def __len__(self):
         return len(self.db)
 
     def __getitem__(self, idx):
@@ -180,6 +179,10 @@ class JointsDataset(Dataset):
 
         target, target_weight = self.generate_target(joints, joints_vis)
 
+        # Genera target per il ramo di super risoluzione
+        y_sr_target = torch.from_numpy(data_numpy.copy().transpose((2, 0, 1))).float()
+        y_sr_target = torch.nn.functional.interpolate(y_sr_target.unsqueeze(0), size=(self.image_size[1] // 4, self.image_size[0] // 4), mode='bilinear', align_corners=False).squeeze(0)
+
         target = torch.from_numpy(target)
         target_weight = torch.from_numpy(target_weight)
 
@@ -195,7 +198,7 @@ class JointsDataset(Dataset):
             'score': score
         }
 
-        return input, target, target_weight, meta
+        return input, target, target_weight, meta, y_sr_target
 
     def select_data(self, db):
         db_selected = []
