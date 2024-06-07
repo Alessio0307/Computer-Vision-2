@@ -1,13 +1,3 @@
-# ------------------------------------------------------------------------------
-# Copyright (c) Microsoft
-# Licensed under the MIT License.
-# Written by Bin Xiao (Bin.Xiao@microsoft.com)
-# ------------------------------------------------------------------------------
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import time
 import logging
 import os
@@ -20,10 +10,10 @@ from core.evaluate import accuracy
 from core.inference import get_final_preds
 from utils.transforms import flip_back
 from utils.vis import save_debug_images
+from config import cfg
 
 
 logger = logging.getLogger(__name__)
-
 
 def train(config, train_loader, model, criterion, optimizer, epoch,
           output_dir, tb_log_dir, writer_dict):
@@ -34,6 +24,8 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
     acc = AverageMeter()
 
     model.train()
+
+    scale_factor = config.LOSS.SCALE_FACTOR  # Legge lo scale factor dalla configurazione
 
     end = time.time()
     for i, (input, target, target_weight, meta, y_sr_target) in enumerate(train_loader):
@@ -53,14 +45,17 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
             loss = criterion(output, target, target_weight)
 
         sr_loss = F.mse_loss(y_sr, y_sr_target)
-        total_loss = loss + sr_loss
+
+        # Applica il fattore di scala alla sr_loss
+        scaled_sr_loss = sr_loss * scale_factor
+        total_loss = loss + scaled_sr_loss
 
         optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
 
         losses.update(loss.item(), input.size(0))
-        sr_losses.update(sr_loss.item(), input.size(0))
+        sr_losses.update(scaled_sr_loss.item(), input.size(0))
 
         _, avg_acc, cnt, pred = accuracy(output.detach().cpu().numpy(),
                                          target.detach().cpu().numpy())
