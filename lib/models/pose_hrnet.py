@@ -8,19 +8,20 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from .EDSR import EDSR
+
 import os
 import logging
 
 import torch
 import torch.nn as nn
 
-
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
 
 
 def conv3x3(in_planes, out_planes, stride=1):
-    """3x3 convolution with padding"""
+    #3x3 convolution with padding
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
@@ -288,6 +289,7 @@ class PoseHighResolutionNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.layer1 = self._make_layer(Bottleneck, 64, 4)
 
+
         self.stage2_cfg = cfg['MODEL']['EXTRA']['STAGE2']
         num_channels = self.stage2_cfg['NUM_CHANNELS']
         block = blocks_dict[self.stage2_cfg['BLOCK']]
@@ -297,6 +299,9 @@ class PoseHighResolutionNet(nn.Module):
         self.transition1 = self._make_transition_layer([256], num_channels)
         self.stage2, pre_stage_channels = self._make_stage(
             self.stage2_cfg, num_channels)
+
+        # Aggiunta del modello EDSR
+        self.edsr = EDSR(num_channels=32)
 
         self.stage3_cfg = cfg['MODEL']['EXTRA']['STAGE3']
         num_channels = self.stage3_cfg['NUM_CHANNELS']
@@ -422,6 +427,14 @@ class PoseHighResolutionNet(nn.Module):
 
         return nn.Sequential(*modules), num_inchannels
 
+    def print_weights_mean(self, layer, name):
+        total_sum = 0
+        total_params = 0
+        for param in layer.parameters():
+            total_sum += param.sum().item()
+            total_params += param.numel()
+        print(f"Mean of weights for {name}: {total_sum / total_params}")
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
@@ -431,6 +444,7 @@ class PoseHighResolutionNet(nn.Module):
         x = self.relu(x)
         x = self.layer1(x)
 
+
         x_list = []
         for i in range(self.stage2_cfg['NUM_BRANCHES']):
             if self.transition1[i] is not None:
@@ -438,6 +452,9 @@ class PoseHighResolutionNet(nn.Module):
             else:
                 x_list.append(x)
         y_list = self.stage2(x_list)
+
+        # Passaggio attraverso EDSR dopo il primo stage
+        y_sr = self.edsr(y_list[0])
 
         x_list = []
         for i in range(self.stage3_cfg['NUM_BRANCHES']):
@@ -457,7 +474,7 @@ class PoseHighResolutionNet(nn.Module):
 
         x = self.final_layer(y_list[0])
 
-        return x
+        return x, y_sr
 
     def init_weights(self, pretrained=''):
         logger.info('=> init weights from normal distribution')
