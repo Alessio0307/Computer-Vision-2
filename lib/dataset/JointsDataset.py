@@ -181,7 +181,7 @@ class JointsDataset(Dataset):
 
         # Genera target per il ramo di super risoluzione
         y_sr_target = torch.from_numpy(data_numpy.copy().transpose((2, 0, 1))).float()
-        y_sr_target = torch.nn.functional.interpolate(y_sr_target.unsqueeze(0), size=(self.image_size[1] // 4, self.image_size[0] // 4), mode='bilinear', align_corners=False).squeeze(0)
+        y_sr_target = torch.nn.functional.interpolate(y_sr_target.unsqueeze(0), size=(self.image_size[1] * 4, self.image_size[0] * 4), mode='bilinear', align_corners=False).squeeze(0)
 
         target = torch.from_numpy(target)
         target_weight = torch.from_numpy(target_weight)
