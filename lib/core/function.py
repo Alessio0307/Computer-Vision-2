@@ -17,18 +17,6 @@ from utils.vis import save_debug_images
 logger = logging.getLogger(__name__)
 scale_factor = config.LOSS.SCALE_FACTOR  # Legge lo scale factor dalla configurazione
 
-def plot_roc_curve(fpr, tpr, roc_auc, title='ROC Curve'):
-    plt.figure()
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
-    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title(title)
-    plt.legend(loc="lower right")
-    plt.show()
-
 def train(config, train_loader, model, criterion, optimizer, epoch,
           output_dir, tb_log_dir, writer_dict):
     batch_time = AverageMeter()
@@ -110,7 +98,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
              tb_log_dir, writer_dict=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
-    sr_losses = AverageMeter()  # Aggiunto per monitorare la perdita del super-risoluzione
+    sr_losses = AverageMeter()  # For tracking super-resolution loss
     total_losses = AverageMeter()  # For tracking total loss
     acc = AverageMeter()
 
@@ -130,7 +118,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     all_targets = []
     all_losses = []
     all_total_losses = []
-                       
+
     with torch.no_grad():
         end = time.time()
         for i, (input, target, target_weight, meta, y_sr_target) in enumerate(val_loader):
@@ -151,15 +139,14 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             else:
                 loss = criterion(output, target, target_weight)
 
-            # Calcolo della perdita del super-risoluzione
+            # Calculate super-resolution loss
             sr_loss = F.mse_loss(y_sr, y_sr_target)
-            scaled_sr_loss = sr_loss * scale_factor
-            total_loss = loss + scaled_sr_loss
+            total_loss = loss + sr_loss
 
             num_images = input.size(0)
             losses.update(loss.item(), num_images)
             sr_losses.update(sr_loss.item(), num_images)  # Update super-resolution loss
-            total_losses.update(total_loss.item(), num_images)  # Update total loss
+            total_losses.update(total_loss.item(), num_images)
 
             all_targets.append(target.cpu().numpy())
             all_losses.append(loss.item())
@@ -205,6 +192,19 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 save_debug_images(config, input, meta, target, pred*4, output,
                                   prefix)
 
+        all_targets = np.concatenate(all_targets).ravel().tolist()
+        all_losses = np.array(all_losses).tolist()
+        all_total_losses = np.array(all_total_losses).tolist()
+
+        data_to_save = {
+            'targets': all_targets,
+            'losses': all_losses,
+            'total_losses': all_total_losses
+        }
+
+        with open(os.path.join(output_dir, 'roc_data.json'), 'w') as f:
+            json.dump(data_to_save, f)
+
         name_values, perf_indicator = val_dataset.evaluate(
             config, all_preds, output_dir, all_boxes, image_path,
             filenames, imgnums
@@ -221,30 +221,15 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             writer = writer_dict['writer']
             global_steps = writer_dict['valid_global_steps']
             writer.add_scalar('valid_loss', losses.avg, global_steps)
-            writer.add_scalar('valid_sr_loss', sr_losses.avg, global_steps)  # Log della perdita del super-risoluzione
+            writer.add_scalar('valid_sr_loss', sr_losses.avg, global_steps)  # Log super-resolution loss
             writer.add_scalar('valid_acc', acc.avg, global_steps)
 
             if isinstance(name_values, list):
                 for name_value in name_values:
                     writer.add_scalars('valid', dict(name_value), global_steps)
             else:
-                writer.add_scalars('valid', dict(name_values), global_steps)
+                writer.add_scalars('valid', dict(name_value), global_steps)
             writer_dict['valid_global_steps'] = global_steps + 1
-
-    # Compute ROC curve and ROC area for each class
-    all_targets = np.concatenate(all_targets).ravel()
-    all_losses = np.array(all_losses)
-    all_total_losses = np.array(all_total_losses)
-
-    # Compute ROC curve for HRNet with EDSR (total_loss)
-    fpr, tpr, _ = roc_curve(all_targets, all_total_losses)
-    roc_auc = auc(fpr, tpr)
-    plot_roc_curve(fpr, tpr, roc_auc, title='ROC Curve - HRNet with EDSR (Total Loss)')
-
-    # Compute ROC curve for HRNet without EDSR (loss)
-    fpr, tpr, _ = roc_curve(all_targets, all_losses)
-    roc_auc = auc(fpr, tpr)
-    plot_roc_curve(fpr, tpr, roc_auc, title='ROC Curve - HRNet without EDSR (Loss)')
 
     return perf_indicator
 
@@ -267,7 +252,6 @@ def _print_name_value(name_value, full_arch_name):
         ' '.join(['| {:.3f}'.format(value) for value in values]) +
          ' |'
     )
-
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
