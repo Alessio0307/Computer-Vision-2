@@ -5,6 +5,8 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
 
 from core.evaluate import accuracy
 from core.inference import get_final_preds
@@ -13,6 +15,18 @@ from utils.vis import save_debug_images
 
 
 logger = logging.getLogger(__name__)
+
+def plot_roc_curve(fpr, tpr, roc_auc, title='ROC Curve'):
+    plt.figure()
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(title)
+    plt.legend(loc="lower right")
+    plt.show()
 
 def train(config, train_loader, model, criterion, optimizer, epoch,
           output_dir, tb_log_dir, writer_dict):
@@ -98,6 +112,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     batch_time = AverageMeter()
     losses = AverageMeter()
     sr_losses = AverageMeter()  # Aggiunto per monitorare la perdita del super-risoluzione
+    total_losses = AverageMeter()  # For tracking total loss
     acc = AverageMeter()
 
     model.eval()
@@ -112,6 +127,11 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     filenames = []
     imgnums = []
     idx = 0
+
+    all_targets = []
+    all_losses = []
+    all_total_losses = []
+                       
     with torch.no_grad():
         end = time.time()
         for i, (input, target, target_weight, meta, y_sr_target) in enumerate(val_loader):
@@ -137,8 +157,13 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             total_loss = loss + sr_loss
 
             num_images = input.size(0)
-            losses.update(total_loss.item(), num_images)
-            sr_losses.update(sr_loss.item(), num_images)  # Aggiornamento della perdita del super-risoluzione
+            losses.update(loss.item(), num_images)
+            sr_losses.update(sr_loss.item(), num_images)  # Update super-resolution loss
+            total_losses.update(total_loss.item(), num_images)  # Update total loss
+
+            all_targets.append(target.cpu().numpy())
+            all_losses.append(loss.item())
+            all_total_losses.append(total_loss.item())
 
             _, avg_acc, cnt, pred = accuracy(output.cpu().numpy(),
                                              target.cpu().numpy())
@@ -206,9 +231,22 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 writer.add_scalars('valid', dict(name_values), global_steps)
             writer_dict['valid_global_steps'] = global_steps + 1
 
+    # Compute ROC curve and ROC area for each class
+    all_targets = np.concatenate(all_targets).ravel()
+    all_losses = np.array(all_losses)
+    all_total_losses = np.array(all_total_losses)
+
+    # Compute ROC curve for HRNet with EDSR (total_loss)
+    fpr, tpr, _ = roc_curve(all_targets, all_total_losses)
+    roc_auc = auc(fpr, tpr)
+    plot_roc_curve(fpr, tpr, roc_auc, title='ROC Curve - HRNet with EDSR (Total Loss)')
+
+    # Compute ROC curve for HRNet without EDSR (loss)
+    fpr, tpr, _ = roc_curve(all_targets, all_losses)
+    roc_auc = auc(fpr, tpr)
+    plot_roc_curve(fpr, tpr, roc_auc, title='ROC Curve - HRNet without EDSR (Loss)')
+
     return perf_indicator
-
-
 
 # markdown format output
 def _print_name_value(name_value, full_arch_name):
