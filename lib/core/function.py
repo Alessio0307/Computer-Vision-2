@@ -19,7 +19,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
-    sr_losses = AverageMeter()
+    sr_losses = AverageMeter()  # Aggiunto per monitorare la perdita del super-risoluzione
     acc = AverageMeter()
 
     model.train()
@@ -30,11 +30,16 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
     for i, (input, target, target_weight, meta, y_sr_target) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
+        # Compute output and super-resolution output
         output, y_sr = model(input)
 
         target = target.cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
         y_sr_target = y_sr_target.cuda(non_blocking=True)
+
+        # Ensure y_sr has 3 channels
+        y_sr = F.interpolate(y_sr, size=y_sr_target.shape[2:], mode='bilinear', align_corners=False)
+        y_sr = torch.nn.Conv2d(y_sr.shape[1], 3, kernel_size=1).cuda()(y_sr)
 
         if isinstance(output, list):
             loss = criterion(output[0], target, target_weight)
@@ -43,6 +48,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         else:
             loss = criterion(output, target, target_weight)
 
+        # Calcolo della perdita del super-risoluzione
         sr_loss = F.mse_loss(y_sr, y_sr_target)
 
         # Applica il fattore di scala alla sr_loss
@@ -54,7 +60,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         optimizer.step()
 
         losses.update(loss.item(), input.size(0))
-        sr_losses.update(scaled_sr_loss.item(), input.size(0))
+        sr_losses.update(scaled_sr_loss.item(), input.size(0))  # Aggiornamento della perdita del super-risoluzione
 
         _, avg_acc, cnt, pred = accuracy(output.detach().cpu().numpy(),
                                          target.detach().cpu().numpy())
@@ -79,7 +85,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
             writer = writer_dict['writer']
             global_steps = writer_dict['train_global_steps']
             writer.add_scalar('train_loss', losses.val, global_steps)
-            writer.add_scalar('train_sr_loss', sr_losses.val, global_steps)
+            writer.add_scalar('train_sr_loss', sr_losses.val, global_steps)  # Log della perdita del super-risoluzione
             writer.add_scalar('train_acc', acc.val, global_steps)
             writer_dict['train_global_steps'] = global_steps + 1
 
@@ -91,7 +97,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
              tb_log_dir, writer_dict=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
-    sr_losses = AverageMeter()
+    sr_losses = AverageMeter()  # Aggiunto per monitorare la perdita del super-risoluzione
     acc = AverageMeter()
 
     model.eval()
@@ -115,6 +121,10 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             target_weight = target_weight.cuda(non_blocking=True)
             y_sr_target = y_sr_target.cuda(non_blocking=True)
 
+            # Ensure y_sr has 3 channels
+            y_sr = F.interpolate(y_sr, size=y_sr_target.shape[2:], mode='bilinear', align_corners=False)
+            y_sr = torch.nn.Conv2d(y_sr.shape[1], 3, kernel_size=1).cuda()(y_sr)
+
             if isinstance(output, list):
                 loss = criterion(output[0], target, target_weight)
                 for output_i in output[1:]:
@@ -122,12 +132,13 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             else:
                 loss = criterion(output, target, target_weight)
 
+            # Calcolo della perdita del super-risoluzione
             sr_loss = F.mse_loss(y_sr, y_sr_target)
             total_loss = loss + sr_loss
 
             num_images = input.size(0)
             losses.update(total_loss.item(), num_images)
-            sr_losses.update(sr_loss.item(), num_images)
+            sr_losses.update(sr_loss.item(), num_images)  # Aggiornamento della perdita del super-risoluzione
 
             _, avg_acc, cnt, pred = accuracy(output.cpu().numpy(),
                                              target.cpu().numpy())
@@ -185,7 +196,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             writer = writer_dict['writer']
             global_steps = writer_dict['valid_global_steps']
             writer.add_scalar('valid_loss', losses.avg, global_steps)
-            writer.add_scalar('valid_sr_loss', sr_losses.avg, global_steps)
+            writer.add_scalar('valid_sr_loss', sr_losses.avg, global_steps)  # Log della perdita del super-risoluzione
             writer.add_scalar('valid_acc', acc.avg, global_steps)
 
             if isinstance(name_values, list):
