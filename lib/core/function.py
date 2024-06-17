@@ -27,9 +27,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
 
     end = time.time()
     for i, (input, target, target_weight, meta, y_sr_target) in enumerate(train_loader):
-        if i >= 100:  # Limit to 100 samples per epoch
-            break
-
+       
         data_time.update(time.time() - end)
 
         # Compute output and super-resolution output
@@ -125,9 +123,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     with torch.no_grad():
         end = time.time()
         for i, (input, target, target_weight, meta, y_sr_target) in enumerate(val_loader):
-            if i >= 50:  # Limit to 50 samples per validation
-                break
-
+            
             output, y_sr = model(input)
 
             target = target.cuda(non_blocking=True)
