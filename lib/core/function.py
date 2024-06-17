@@ -15,6 +15,7 @@ from utils.vis import save_debug_images
 
 
 logger = logging.getLogger(__name__)
+scale_factor = config.LOSS.SCALE_FACTOR  # Legge lo scale factor dalla configurazione
 
 def plot_roc_curve(fpr, tpr, roc_auc, title='ROC Curve'):
     plt.figure()
@@ -37,8 +38,6 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
     acc = AverageMeter()
 
     model.train()
-
-    scale_factor = config.LOSS.SCALE_FACTOR  # Legge lo scale factor dalla configurazione
 
     end = time.time()
     for i, (input, target, target_weight, meta, y_sr_target) in enumerate(train_loader):
@@ -154,7 +153,8 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
 
             # Calcolo della perdita del super-risoluzione
             sr_loss = F.mse_loss(y_sr, y_sr_target)
-            total_loss = loss + sr_loss
+            scaled_sr_loss = sr_loss * scale_factor
+            total_loss = loss + scaled_sr_loss
 
             num_images = input.size(0)
             losses.update(loss.item(), num_images)
