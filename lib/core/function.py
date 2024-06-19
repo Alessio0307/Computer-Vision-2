@@ -166,8 +166,12 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             target_weight = target_weight.cuda(non_blocking=True)
             y_sr_target = y_sr_target.cuda(non_blocking=True)
 
+            # Ensure y_sr has 3 channels if needed
+            if y_sr.shape[1] != 3:
+              y_sr = torch.nn.Conv2d(y_sr.shape[1], 3, kernel_size=1).cuda()(y_sr)
+          
+            # Resize y_sr to match y_sr_target size without normalizing
             y_sr = F.interpolate(y_sr, size=y_sr_target.shape[2:], mode='bilinear', align_corners=False)
-            y_sr = torch.nn.Conv2d(y_sr.shape[1], 3, kernel_size=1).cuda()(y_sr)
 
             loss = criterion(output, target, target_weight)
             sr_loss = F.mse_loss(y_sr, y_sr_target)
