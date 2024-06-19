@@ -12,7 +12,7 @@ import argparse
 import os
 import pprint
 import shutil
-
+import numpy as np
 import torch
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
@@ -21,6 +21,8 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 from tensorboardX import SummaryWriter
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
 
 import _init_paths
 from config import cfg
@@ -72,6 +74,26 @@ def parse_args():
 
     return args
 
+# Funzione per tracciare la curva ROC
+def plot_roc_curve(all_labels, all_preds, output_dir):    
+    fpr, tpr, _ = roc_curve(all_labels, all_preds)
+    roc_auc = auc(fpr, tpr)
+
+    plt.figure()
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate (FPR) - Errore Falso Positivo')
+    plt.ylabel('True Positive Rate (TPR) - Tasso di Veri Positivi')
+    plt.title('Curva ROC - Riconoscimento delle Pose Umane')
+    plt.legend(loc="lower right")
+
+    # Salva l'immagine nella directory specificata
+    roc_curve_dir = os.path.join(output_dir, 'roccurve')
+    os.makedirs(roc_curve_dir, exist_ok=True)
+    plt.savefig(os.path.join(roc_curve_dir, 'roc_curve.png'))
+    plt.close()
 
 def main():
     args = parse_args()
@@ -216,6 +238,11 @@ def main():
     )
     torch.save(model.module.state_dict(), final_model_state_file)
     writer_dict['writer'].close()
+
+    # Traccia la curva ROC dopo tutte le epoche
+    from core.function import global_all_probs, global_all_targets
+
+    plot_roc_curve(global_all_targets, global_all_probs, final_output_dir)
 
 
 if __name__ == '__main__':
