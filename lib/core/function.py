@@ -46,9 +46,12 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         target_weight = target_weight.cuda(non_blocking=True)
         y_sr_target = y_sr_target.cuda(non_blocking=True)
 
-        # Ensure y_sr has 3 channels
+        # Ensure y_sr has 3 channels if needed
+        if y_sr.shape[1] != 3:
+            y_sr = torch.nn.Conv2d(y_sr.shape[1], 3, kernel_size=1).cuda()(y_sr)
+
+        # Resize y_sr to match y_sr_target size without normalizing
         y_sr = F.interpolate(y_sr, size=y_sr_target.shape[2:], mode='bilinear', align_corners=False)
-        y_sr = torch.nn.Conv2d(y_sr.shape[1], 3, kernel_size=1).cuda()(y_sr)
 
         if isinstance(output, list):
             loss = criterion(output[0], target, target_weight)
