@@ -21,6 +21,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 from tensorboardX import SummaryWriter
+from codecarbon import track_emissions
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
 
@@ -95,6 +96,7 @@ def plot_roc_curve(all_labels, all_preds, output_dir):
     plt.savefig(os.path.join(roc_curve_dir, 'roc_curve.png'))
     plt.close()
 
+@track_emissions(country_iso_code = "ITA", offline = True)
 def main():
     args = parse_args()
     update_config(cfg, args)

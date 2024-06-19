@@ -20,6 +20,7 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
+from codecarbon import track_emissions
 
 import _init_paths
 from config import cfg
@@ -65,7 +66,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-
+@track_emissions(country_iso_code = "ITA", offline = True)
 def main():
     args = parse_args()
     update_config(cfg, args)
