@@ -301,7 +301,7 @@ class PoseHighResolutionNet(nn.Module):
             self.stage2_cfg, num_channels)
 
         # Aggiunta del modello EDSR
-        self.edsr = EDSR(num_channels=32)
+        self.edsr = EDSR()
 
         self.stage3_cfg = cfg['MODEL']['EXTRA']['STAGE3']
         num_channels = self.stage3_cfg['NUM_CHANNELS']
@@ -453,7 +453,7 @@ class PoseHighResolutionNet(nn.Module):
                 x_list.append(x)
         y_list = self.stage2(x_list)
 
-        # Passaggio attraverso EDSR dopo il primo stage
+        # Passaggio attraverso EDSR dopo il secondo stage
         y_sr = self.edsr(y_list[0])
 
         x_list = []
