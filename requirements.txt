@@ -9,7 +9,6 @@ json-tricks==3.17.0
 scikit-image==0.20.0
 yacs==0.1.8
 tensorboardX==2.6
-tensorflow==2.15.0
 torch==2.0.0
 torchvision==0.15.1
 torchaudio==2.0.1
