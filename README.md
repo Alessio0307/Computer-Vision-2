@@ -116,48 +116,9 @@ The code is developed using python 3.6 on Ubuntu 16.04. NVIDIA GPUs are needed. 
         `-- pytorch
             |-- imagenet
             |   |-- hrnet_w32-36af842e.pth
-            |   |-- hrnet_w48-8ef0771d.pth
-            |   |-- resnet50-19c8e357.pth
-            |   |-- resnet101-5d3b4d8f.pth
-            |   `-- resnet152-b121ed2d.pth
-            |-- pose_coco
-            |   |-- pose_hrnet_w32_256x192.pth
-            |   |-- pose_hrnet_w32_384x288.pth
-            |   |-- pose_hrnet_w48_256x192.pth
-            |   |-- pose_hrnet_w48_384x288.pth
-            |   |-- pose_resnet_101_256x192.pth
-            |   |-- pose_resnet_101_384x288.pth
-            |   |-- pose_resnet_152_256x192.pth
-            |   |-- pose_resnet_152_384x288.pth
-            |   |-- pose_resnet_50_256x192.pth
-            |   `-- pose_resnet_50_384x288.pth
-            `-- pose_mpii
-                |-- pose_hrnet_w32_256x256.pth
-                |-- pose_hrnet_w48_256x256.pth
-                |-- pose_resnet_101_256x256.pth
-                |-- pose_resnet_152_256x256.pth
-                `-- pose_resnet_50_256x256.pth
 
    ```
    
-### Data preparation
-**For MPII data**, please download from [MPII Human Pose Dataset](http://human-pose.mpi-inf.mpg.de/). The original annotation files are in matlab format. We have converted them into json format, you also need to download them from [OneDrive](https://1drv.ms/f/s!AhIXJn_J-blW00SqrairNetmeVu4) or [GoogleDrive](https://drive.google.com/drive/folders/1En_VqmStnsXMdldXA6qpqEyDQulnmS3a?usp=sharing).
-Extract them under {POSE_ROOT}/data, and make them look like this:
-```
-${POSE_ROOT}
-|-- data
-`-- |-- mpii
-    `-- |-- annot
-        |   |-- gt_valid.mat
-        |   |-- test.json
-        |   |-- train.json
-        |   |-- trainval.json
-        |   `-- valid.json
-        `-- images
-            |-- 000001163.jpg
-            |-- 000003072.jpg
-```
-
 **For COCO data**, please download from [COCO download](http://cocodataset.org/#download), 2017 Train/Val is needed for COCO keypoints training and validation. We also provide person detection result of COCO val2017 and test-dev2017 to reproduce our multi-person pose estimation results. Please download from [OneDrive](https://1drv.ms/f/s!AhIXJn_J-blWzzDXoz5BeFl8sWM-) or [GoogleDrive](https://drive.google.com/drive/folders/1fRUDNUDxe9fjqcRZ2bnF_TKMlO0nB_dk?usp=sharing).
 Download and extract them under {POSE_ROOT}/data, and make them look like this:
 ```
@@ -167,9 +128,6 @@ ${POSE_ROOT}
     `-- |-- annotations
         |   |-- person_keypoints_train2017.json
         |   `-- person_keypoints_val2017.json
-        |-- person_detection_results
-        |   |-- COCO_val2017_detections_AP_H_56_person.json
-        |   |-- COCO_test-dev2017_detections_AP_H_609_person.json
         `-- images
             |-- train2017
             |   |-- 000000000009.jpg
@@ -183,23 +141,6 @@ ${POSE_ROOT}
                 |-- ... 
 ```
 
-### Training and Testing
-
-#### Testing on MPII dataset using model zoo's models([GoogleDrive](https://drive.google.com/drive/folders/1hOTihvbyIxsm5ygDpbUuJ7O_tzv4oXjC?usp=sharing) or [OneDrive](https://1drv.ms/f/s!AhIXJn_J-blW231MH2krnmLq5kkQ))
- 
-
-```
-python tools/test.py \
-    --cfg experiments/mpii/hrnet/w32_256x256_adam_lr1e-3.yaml \
-    TEST.MODEL_FILE models/pytorch/pose_mpii/pose_hrnet_w32_256x256.pth
-```
-
-#### Training on MPII dataset
-
-```
-python tools/train.py \
-    --cfg experiments/mpii/hrnet/w32_256x256_adam_lr1e-3.yaml
-```
 
 #### Testing on COCO val2017 dataset using model zoo's models([GoogleDrive](https://drive.google.com/drive/folders/1hOTihvbyIxsm5ygDpbUuJ7O_tzv4oXjC?usp=sharing) or [OneDrive](https://1drv.ms/f/s!AhIXJn_J-blW231MH2krnmLq5kkQ))
  
@@ -217,10 +158,6 @@ python tools/test.py \
 python tools/train.py \
     --cfg experiments/coco/hrnet/w32_256x192_adam_lr1e-3.yaml \
 ```
-
-
-### Other applications
-Many other dense prediction tasks, such as segmentation, face alignment and object detection, etc. have been benefited by HRNet. More information can be found at [Deep High-Resolution Representation Learning](https://jingdongwang2017.github.io/Projects/HRNet/).
 
 ### Citation
 If you use our code or models in your research, please cite with:
