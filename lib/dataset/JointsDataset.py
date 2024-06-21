@@ -15,6 +15,7 @@ import random
 import cv2
 import numpy as np
 import torch
+from torchvision import transforms
 from torch.utils.data import Dataset
 
 from utils.transforms import get_affine_transform
@@ -179,9 +180,11 @@ class JointsDataset(Dataset):
 
         target, target_weight = self.generate_target(joints, joints_vis)
 
-        # Genera target per il ramo di super risoluzione
+        # Genera y_sr_target dalle immagini originali in data_numpy
         y_sr_target = torch.from_numpy(data_numpy.copy().transpose((2, 0, 1))).float()
-        y_sr_target = torch.nn.functional.interpolate(y_sr_target.unsqueeze(0), size=(self.image_size[1] * 4, self.image_size[0] * 4), mode='bilinear', align_corners=False).squeeze(0)
+        # Ridimensiona y_sr_target a [3, 128, 96]
+        resize_transform = transforms.Resize((128, 96), antialias=True)
+        y_sr_target = resize_transform(y_sr_target)
 
         target = torch.from_numpy(target)
         target_weight = torch.from_numpy(target_weight)
