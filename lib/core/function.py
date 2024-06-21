@@ -4,7 +4,6 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import roc_curve, auc
 import matplotlib.pyplot as plt
 
 from core.evaluate import accuracy
@@ -13,11 +12,6 @@ from utils.transforms import flip_back
 from utils.vis import save_debug_images
 
 logger = logging.getLogger(__name__)
-
-# Variabili globali per salvare le probabilità e le etichette
-global global_all_probs, global_all_targets
-global_all_probs = []
-global_all_targets = []
 
 def train(config, train_loader, model, criterion, optimizer, epoch,
           output_dir, tb_log_dir, writer_dict):
@@ -45,13 +39,6 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         target = target.cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
         y_sr_target = y_sr_target.cuda(non_blocking=True)
-
-        # Ensure y_sr has 3 channels if needed
-        if y_sr.shape[1] != 3:
-            y_sr = torch.nn.Conv2d(y_sr.shape[1], 3, kernel_size=1).cuda()(y_sr)
-
-        # Resize y_sr to match y_sr_target size without normalizing
-        y_sr = F.interpolate(y_sr, size=y_sr_target.shape[2:], mode='bilinear', align_corners=False)
 
         if isinstance(output, list):
             loss = criterion(output[0], target, target_weight)
@@ -132,11 +119,7 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     imgnums = []
     idx = 0
 
-    print("------------- INIZIO TEST -------------")
-
-    # Liste per salvare le probabilità e le etichette vere
-    all_probs = []
-    all_targets = []
+    print("------------- INIZIO VALIDAZIONE -------------")
 
     with torch.no_grad():
         end = time.time()
@@ -165,13 +148,6 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             target = target.cuda(non_blocking=True)
             target_weight = target_weight.cuda(non_blocking=True)
             y_sr_target = y_sr_target.cuda(non_blocking=True)
-
-            # Ensure y_sr has 3 channels if needed
-            if y_sr.shape[1] != 3:
-              y_sr = torch.nn.Conv2d(y_sr.shape[1], 3, kernel_size=1).cuda()(y_sr)
-          
-            # Resize y_sr to match y_sr_target size without normalizing
-            y_sr = F.interpolate(y_sr, size=y_sr_target.shape[2:], mode='bilinear', align_corners=False)
 
             loss = criterion(output, target, target_weight)
             sr_loss = F.mse_loss(y_sr, y_sr_target)
@@ -205,10 +181,6 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
 
             idx += num_images
 
-            # Salva le probabilità (predizioni) e le etichette vere
-            all_probs.append(output.cpu().numpy())
-            all_targets.append(target.cpu().numpy())
-
             if i % config.PRINT_FREQ == 0:
                 msg = 'Test: [{0}/{1}]\t' \
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
@@ -224,18 +196,6 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 save_debug_images(config, input, meta, target, pred*4, output, prefix)
 
         name_values, perf_indicator = val_dataset.evaluate(config, all_preds, output_dir, all_boxes, image_path, filenames, imgnums)
-
-        # Converti le liste in array numpy senza appiattirle
-        all_probs = np.concatenate(all_probs, axis=0).flatten()
-        all_targets = np.concatenate(all_targets, axis=0).flatten()
-
-        # Genera etichette binarie basate su una soglia della media del GT
-        mean_target = np.mean(all_targets)
-        binary_labels = (all_targets > mean_target).astype(int)   # Etichetta 1 se l'errore è inferiore alla media, altrimenti 0
-
-        # Aggiungi le probabilità e le etichette globali
-        global_all_probs.extend(all_probs)
-        global_all_targets.extend(binary_labels)
 
         model_name = config.MODEL.NAME  # Assicurati di definire model_name
 
