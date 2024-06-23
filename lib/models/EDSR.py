@@ -56,7 +56,7 @@ class ResBlock(nn.Module):
 
 
 class EDSR(nn.Module):
-    def __init__(self, num_channels=3, input_channel=32, factor=2, width=64, depth=16, kernel_size=3, conv=default_conv):
+    def __init__(self, input_channel, num_channels=3, factor=2, width=64, depth=16, kernel_size=3, conv=default_conv):
         super(EDSR, self).__init__()
 
         n_resblock = depth
