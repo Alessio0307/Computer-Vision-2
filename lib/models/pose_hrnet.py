@@ -300,9 +300,6 @@ class PoseHighResolutionNet(nn.Module):
         self.stage2, pre_stage_channels = self._make_stage(
             self.stage2_cfg, num_channels)
 
-        # Aggiunta del modello EDSR
-        self.edsr = EDSR()
-
         self.stage3_cfg = cfg['MODEL']['EXTRA']['STAGE3']
         num_channels = self.stage3_cfg['NUM_CHANNELS']
         block = blocks_dict[self.stage3_cfg['BLOCK']]
@@ -334,6 +331,16 @@ class PoseHighResolutionNet(nn.Module):
         )
 
         self.pretrained_layers = cfg['MODEL']['EXTRA']['PRETRAINED_LAYERS']
+
+        self.edsr_after_stage2 = cfg.MODEL.get('EDSR_AFTER_STAGE2', None)
+        # Passaggio attraverso EDSR
+        if self.edsr_after_stage2 is not None:
+            if self.edsr_after_stage2:
+                self.edsr = EDSR(input_channel=cfg.MODEL.EXTRA.STAGE2.NUM_CHANNELS[0])
+            else:
+                self.edsr = EDSR(input_channel=cfg.MODEL.EXTRA.STAGE3.NUM_CHANNELS[0])
+        else:
+            self.edsr = None
 
     def _make_transition_layer(
             self, num_channels_pre_layer, num_channels_cur_layer):
@@ -454,7 +461,9 @@ class PoseHighResolutionNet(nn.Module):
         y_list = self.stage2(x_list)
 
         # Passaggio attraverso EDSR dopo il secondo stage
-        y_sr = self.edsr(y_list[0])
+        y_sr = None
+        if self.edsr_after_stage2 and self.edsr is not None:
+            y_sr = self.edsr(y_list[0])
 
         x_list = []
         for i in range(self.stage3_cfg['NUM_BRANCHES']):
@@ -463,6 +472,10 @@ class PoseHighResolutionNet(nn.Module):
             else:
                 x_list.append(y_list[i])
         y_list = self.stage3(x_list)
+
+        # Passaggio attraverso EDSR dopo il terzo stage
+        if not self.edsr_after_stage2 and self.edsr is not None:
+            y_sr = self.edsr(y_list[0])
 
         x_list = []
         for i in range(self.stage4_cfg['NUM_BRANCHES']):
@@ -474,8 +487,11 @@ class PoseHighResolutionNet(nn.Module):
 
         x = self.final_layer(y_list[0])
 
-        return x, y_sr
-
+        if y_sr is not None:
+            return x, y_sr
+        else:
+            return x
+            
     def init_weights(self, pretrained=''):
         logger.info('=> init weights from normal distribution')
         for m in self.modules():
