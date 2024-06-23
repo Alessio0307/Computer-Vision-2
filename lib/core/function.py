@@ -34,7 +34,13 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         data_time.update(time.time() - end)
 
         # Compute output and super-resolution output
-        output, y_sr = model(input)
+        outputs = model(input)
+
+        if isinstance(outputs, tuple):
+            output, y_sr = outputs
+        else:
+            output = outputs
+            y_sr = None
 
         target = target.cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
@@ -47,19 +53,21 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         else:
             loss = criterion(output, target, target_weight)
 
-        # Calculate super-resolution loss
-        sr_loss = F.mse_loss(y_sr, y_sr_target)
-
-        # Apply scale factor to sr_loss
-        scaled_sr_loss = sr_loss * scale_factor
-        total_loss = loss + scaled_sr_loss
+        # Calculate super-resolution loss if y_sr is not None
+        if y_sr is not None:
+            sr_loss = F.mse_loss(y_sr, y_sr_target)
+            # Apply scale factor to sr_loss
+            scaled_sr_loss = sr_loss * scale_factor
+            total_loss = loss + scaled_sr_loss
+            sr_losses.update(scaled_sr_loss.item(), input.size(0))  # Update super-resolution loss
+        else:
+            total_loss = loss
 
         optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
 
         losses.update(loss.item(), input.size(0))
-        sr_losses.update(scaled_sr_loss.item(), input.size(0))  # Update super-resolution loss
         total_losses.update(total_loss.item(), input.size(0))  # Update total loss
 
         _, avg_acc, cnt, pred = accuracy(output.detach().cpu().numpy(),
@@ -124,7 +132,15 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     with torch.no_grad():
         end = time.time()
         for i, (input, target, target_weight, meta, y_sr_target) in enumerate(val_loader):
-            outputs, y_sr = model(input)
+
+            # Compute output and super-resolution output
+            outputss = model(input)
+
+            if isinstance(outputss, tuple):
+                outputs, y_sr = outputss
+            else:
+                outputs = outputss
+                y_sr = None
 
             if isinstance(outputs, list):
                 output = outputs[-1]
@@ -150,13 +166,20 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             y_sr_target = y_sr_target.cuda(non_blocking=True)
 
             loss = criterion(output, target, target_weight)
-            sr_loss = F.mse_loss(y_sr, y_sr_target)
-            scaled_sr_loss = sr_loss * scale_factor
-            total_loss = loss + scaled_sr_loss
 
             num_images = input.size(0)
+
+            # Calculate super-resolution loss if y_sr is not None
+            if y_sr is not None:
+                sr_loss = F.mse_loss(y_sr, y_sr_target)
+                # Apply scale factor to sr_loss
+                scaled_sr_loss = sr_loss * scale_factor
+                total_loss = loss + scaled_sr_loss
+                sr_losses.update(scaled_sr_loss.item(), num_images)
+            else:
+                total_loss = loss
+
             losses.update(loss.item(), num_images)
-            sr_losses.update(scaled_sr_loss.item(), num_images)
             total_losses.update(total_loss.item(), num_images)
 
             _, avg_acc, cnt, pred = accuracy(output.cpu().numpy(), target.cpu().numpy())
