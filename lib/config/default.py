@@ -43,6 +43,7 @@ _C.MODEL.TARGET_TYPE = 'gaussian'
 _C.MODEL.IMAGE_SIZE = [256, 256]  # width * height, ex: 192 * 256
 _C.MODEL.HEATMAP_SIZE = [64, 64]  # width * height, ex: 24 * 32
 _C.MODEL.SIGMA = 2
+_C.MODEL.EDSR_AFTER_STAGE2 = None  
 _C.MODEL.EXTRA = CN(new_allowed=True)
 
 _C.LOSS = CN()
@@ -55,7 +56,7 @@ _C.LOSS.USE_DIFFERENT_JOINTS_WEIGHT = False
 # DATASET related params
 _C.DATASET = CN()
 _C.DATASET.ROOT = ''
-_C.DATASET.DATASET = 'mpii'
+_C.DATASET.DATASET = 'coco'
 _C.DATASET.TRAIN_SET = 'train'
 _C.DATASET.TEST_SET = 'valid'
 _C.DATASET.DATA_FORMAT = 'jpg'
@@ -103,7 +104,7 @@ _C.TEST.FLIP_TEST = False
 _C.TEST.POST_PROCESS = False
 _C.TEST.SHIFT_HEATMAP = False
 
-_C.TEST.USE_GT_BBOX = False
+_C.TEST.USE_GT_BBOX = True
 
 # nms
 _C.TEST.IMAGE_THRE = 0.1
