@@ -332,13 +332,13 @@ class PoseHighResolutionNet(nn.Module):
 
         self.pretrained_layers = cfg['MODEL']['EXTRA']['PRETRAINED_LAYERS']
 
-        self.edsr_after_stage2 = cfg.MODEL.get('EDSR_AFTER_STAGE2', None)
-        # Passaggio attraverso EDSR
-        if self.edsr_after_stage2 is not None:
-            if self.edsr_after_stage2:
-                self.edsr = EDSR(input_channel=cfg.MODEL.EXTRA.STAGE2.NUM_CHANNELS[0])
+        self.edsr_after_stage = cfg.MODEL.get('EDSR_AFTER_STAGE', None)
+        if self.edsr_after_stage is not None:
+            self.edsr_layer = cfg.MODEL.get('EDSR_LAYER', None) - 1
+            if self.edsr_after_stage == 2:
+                self.edsr = EDSR(input_channel=cfg.MODEL.EXTRA.STAGE2.NUM_CHANNELS[self.edsr_layer])
             else:
-                self.edsr = EDSR(input_channel=cfg.MODEL.EXTRA.STAGE3.NUM_CHANNELS[0])
+                self.edsr = EDSR(input_channel=cfg.MODEL.EXTRA.STAGE3.NUM_CHANNELS[self.edsr_layer])
         else:
             self.edsr = None
 
@@ -462,8 +462,8 @@ class PoseHighResolutionNet(nn.Module):
 
         # Passaggio attraverso EDSR dopo il secondo stage
         y_sr = None
-        if self.edsr_after_stage2 and self.edsr is not None:
-            y_sr = self.edsr(y_list[0])
+        if self.edsr_after_stage == 2 and self.edsr is not None:
+            y_sr = self.edsr(y_list[self.edsr_layer])
 
         x_list = []
         for i in range(self.stage3_cfg['NUM_BRANCHES']):
@@ -474,8 +474,8 @@ class PoseHighResolutionNet(nn.Module):
         y_list = self.stage3(x_list)
 
         # Passaggio attraverso EDSR dopo il terzo stage
-        if not self.edsr_after_stage2 and self.edsr is not None:
-            y_sr = self.edsr(y_list[0])
+        if self.edsr_after_stage == 3 and self.edsr is not None:
+            y_sr = self.edsr(y_list[self.edsr_layer])
 
         x_list = []
         for i in range(self.stage4_cfg['NUM_BRANCHES']):
