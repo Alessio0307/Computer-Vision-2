@@ -56,6 +56,8 @@ class JointsDataset(Dataset):
         self.transform = transform
         self.db = []
 
+        self.edsr_layer = cfg.MODEL.get('EDSR_LAYER', None)
+
     def _get_db(self):
         raise NotImplementedError
 
@@ -180,12 +182,6 @@ class JointsDataset(Dataset):
 
         target, target_weight = self.generate_target(joints, joints_vis)
 
-        # Genera y_sr_target dalle immagini originali in data_numpy
-        y_sr_target = torch.from_numpy(data_numpy.copy().transpose((2, 0, 1))).float()
-        # Ridimensiona y_sr_target a [3, 128, 96]
-        resize_transform = transforms.Resize((128, 96), antialias=True)
-        y_sr_target = resize_transform(y_sr_target)
-
         target = torch.from_numpy(target)
         target_weight = torch.from_numpy(target_weight)
 
@@ -200,6 +196,29 @@ class JointsDataset(Dataset):
             'rotation': r,
             'score': score
         }
+
+        if self.edsr_layer is not None:
+            # Genera y_sr_target dalle immagini originali in data_numpy
+            y_sr_target = torch.from_numpy(data_numpy.copy().transpose((2, 0, 1))).float()
+            
+            if self.edsr_layer == 1:
+                # Ridimensiona y_sr_target a [3, 128, 96]
+                resize_transform = transforms.Resize((128, 96), antialias=True)
+                
+            elif self.edsr_layer == 2:
+                # Ridimensiona y_sr_target a [3, 64, 48]
+                resize_transform = transforms.Resize((64, 48), antialias=True)
+
+            elif self.edsr_layer == 3:
+                # Ridimensiona y_sr_target a [3, 32, 24]
+                resize_transform = transforms.Resize((32, 24), antialias=True)
+
+            y_sr_target = resize_transform(y_sr_target)
+            y_sr_target_min = y_sr_target.min()
+            y_sr_target_max = y_sr_target.max()
+            y_sr_target = (y_sr_target - y_sr_target_min) / (y_sr_target_max - y_sr_target_min)                           
+        else: 
+            y_sr_target = torch.zeros(1)
 
         return input, target, target_weight, meta, y_sr_target
 
