@@ -12,6 +12,8 @@ import argparse
 import os
 import pprint
 import shutil
+import csv  # Aggiungi questa importazione
+
 import numpy as np
 import torch
 import torch.nn.parallel
@@ -21,6 +23,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 from tensorboardX import SummaryWriter
+import matplotlib.pyplot as plt
 from codecarbon import track_emissions
 
 import _init_paths
@@ -81,17 +84,13 @@ def main():
     logger, final_output_dir, tb_log_dir = create_logger(
         cfg, args.cfg, 'train')
 
-    logger.info(pprint.pformat(args))
-    logger.info(cfg)
-
     # cudnn related setting
     cudnn.benchmark = cfg.CUDNN.BENCHMARK
     torch.backends.cudnn.deterministic = cfg.CUDNN.DETERMINISTIC
     torch.backends.cudnn.enabled = cfg.CUDNN.ENABLED
 
-    model = eval('models.'+cfg.MODEL.NAME+'.get_pose_net')(
-        cfg, is_train=True
-    )
+    model = eval('models.'+cfg.MODEL.NAME+'.get_pose_net')(cfg, is_train=True)
+    model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
 
     # copy model file
     this_dir = os.path.dirname(__file__)
@@ -99,21 +98,6 @@ def main():
         os.path.join(this_dir, '../lib/models', cfg.MODEL.NAME + '.py'),
         final_output_dir)
     # logger.info(pprint.pformat(model))
-
-    writer_dict = {
-        'writer': SummaryWriter(log_dir=tb_log_dir),
-        'train_global_steps': 0,
-        'valid_global_steps': 0,
-    }
-
-    dump_input = torch.rand(
-        (1, 3, cfg.MODEL.IMAGE_SIZE[1], cfg.MODEL.IMAGE_SIZE[0])
-    )
-    writer_dict['writer'].add_graph(model, (dump_input, ))
-
-    logger.info(get_model_summary(model, dump_input))
-
-    model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
 
     # define loss function (criterion) and optimizer
     criterion = JointsMSELoss(
@@ -180,15 +164,26 @@ def main():
         last_epoch=last_epoch
     )
 
+    writer_dict = {
+        'writer': SummaryWriter(log_dir=tb_log_dir),
+        'train_global_steps': 0,
+        'valid_global_steps': 0
+    }
+
+    patience = 12  # Set patience for early stopping
+    waiting = 0
+
+    metr_dicts = []
+    metr_dicts_val = []
+
     for epoch in range(begin_epoch, cfg.TRAIN.END_EPOCH):
-        lr_scheduler.step()
 
         # train for one epoch
-        train(cfg, train_loader, model, criterion, optimizer, epoch,
-              final_output_dir, tb_log_dir, writer_dict)
+        metr_dict = train(cfg, train_loader, model, criterion, optimizer, epoch,
+                          final_output_dir, tb_log_dir, writer_dict)
 
         # evaluate on validation set
-        perf_indicator = validate(
+        perf_indicator, metr_dict_val = validate(
             cfg, valid_loader, valid_dataset, model, criterion,
             final_output_dir, tb_log_dir, writer_dict
         )
@@ -196,8 +191,15 @@ def main():
         if perf_indicator >= best_perf:
             best_perf = perf_indicator
             best_model = True
+            waiting = 0
         else:
             best_model = False
+            waiting += 1
+
+        if waiting > patience:
+            print(f"Early stop at epoch {epoch}")
+            break
+        
 
         logger.info('=> saving checkpoint to {}'.format(final_output_dir))
         save_checkpoint({
@@ -209,6 +211,10 @@ def main():
             'optimizer': optimizer.state_dict(),
         }, best_model, final_output_dir)
 
+        lr_scheduler.step()
+        metr_dicts.append(metr_dict)
+        metr_dicts_val.append(metr_dict_val)
+
     final_model_state_file = os.path.join(
         final_output_dir, 'final_state.pth'
     )
@@ -217,6 +223,31 @@ def main():
     )
     torch.save(model.module.state_dict(), final_model_state_file)
     writer_dict['writer'].close()
+
+    # Al termine del ciclo di addestramento e validazione
+
+    # Salva le metriche di addestramento e validazione nei file CSV
+    with open(
+        os.path.join(final_output_dir, "training_metr.csv"), 'w', newline='') as output_file:
+        dict_writer = csv.DictWriter(output_file, metr_dicts[0].keys())
+        dict_writer.writeheader()
+        dict_writer.writerows(metr_dicts)
+    with open(
+        os.path.join(final_output_dir, "validation_metr.csv"), 'w', newline='') as output_file:
+        dict_writer = csv.DictWriter(output_file, metr_dicts_val[0].keys())
+        dict_writer.writeheader()
+        dict_writer.writerows(metr_dicts_val)
+
+    # Genera e salva i grafici delle metriche di validazione
+    for key in metr_dicts_val[0].keys():
+        temp = []
+        for line in metr_dicts_val:
+            temp.append(line[key])
+        plt.plot(temp)
+        plt.title(key)
+        plt.savefig(os.path.join(final_output_dir, f"{key}.png"))
+        plt.close()
+
 
 if __name__ == '__main__':
     main()
