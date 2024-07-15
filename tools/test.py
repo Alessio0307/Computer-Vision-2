@@ -94,6 +94,7 @@ def main():
             final_output_dir, 'final_state.pth'
         )
         logger.info('=> loading model from {}'.format(model_state_file))
+        print("\n\n", model_state_file, "\n\n")
         model.load_state_dict(torch.load(model_state_file))
 
     model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
